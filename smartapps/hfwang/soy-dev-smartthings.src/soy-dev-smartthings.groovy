@@ -173,7 +173,7 @@ def deviceHandler(evt) {
 	def deviceInfo = state[evt.deviceId]
 	if (deviceInfo) {
 		try {
-			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value]]) {
+			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value, date: evt.isoDate]]) {
 				log.debug "[PROD IFTTT] Event data successfully posted"
 			}
 		} catch (groovyx.net.http.ResponseParseException e) {
