@@ -3,21 +3,35 @@
  *
  *  Copyright 2015 Soy Chat
  *
+ *  ---------------------+----------------+--------------------------+------------------------------------
+ *  Device Type          | Attribute Name | Commands                 | Attribute Values
+ *  ---------------------+----------------+--------------------------+------------------------------------
+ *  switches             | switch         | on, off                  | on, off
+ *  motionSensors        | motion         |                          | active, inactive
+ *  contactSensors       | contact        |                          | open, closed
+ *  presenceSensors      | presence       |                          | present, 'not present'
+ *  temperatureSensors   | temperature    |                          | <numeric, F or C according to unit>
+ *  accelerationSensors  | acceleration   |                          | active, inactive
+ *  waterSensors         | water          |                          | wet, dry
+ *  lightSensors         | illuminance    |                          | <numeric, lux>
+ *  humiditySensors      | humidity       |                          | <numeric, percent>
+ *  alarms               | alarm          | strobe, siren, both, off | strobe, siren, both, off
+ *  locks                | lock           | lock, unlock             | locked, unlocked
+ *  ---------------------+----------------+--------------------------+------------------------------------
  */
 definition(
     name: "Soy dev SmartThings",
     namespace: "hfwang",
-    author: "Soy Chat",
+    author: "Hsiu-Fan Wang",
     description: "Exposes a smartthings hub to the vagries of soy chat.",
     category: "",
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+    iconUrl: "https://ifttt.com/images/channels/ifttt.png",
+    iconX2Url: "https://ifttt.com/images/channels/ifttt_med.png",
     oauth: [displayName: "Soy Chat", displayLink: "https://www.soychat.com/"])
 
 
 preferences {
-	section("Allow Soy to control these things...") {
+	section("Allow IFTTT to control these things...") {
 		input "switches", "capability.switch", title: "Which Switches?", multiple: true, required: false
 		input "motionSensors", "capability.motionSensor", title: "Which Motion Sensors?", multiple: true, required: false
 		input "contactSensors", "capability.contactSensor", title: "Which Contact Sensors?", multiple: true, required: false
@@ -65,11 +79,6 @@ mappings {
 			GET: "listSubscriptions"
 		]
 	}
-    path("/uninstall") {
-        action: [
-            POST: "performUninstall"
-        ]
-    }
 }
 
 def installed() {
@@ -77,11 +86,16 @@ def installed() {
 }
 
 def updated() {
+	def currentDeviceIds = settings.collect { k, devices -> devices }.flatten().collect { it.id }.unique()
+	def subscriptionDevicesToRemove = app.subscriptions*.device.findAll { device ->
+		!currentDeviceIds.contains(device.id)
+	}
+	subscriptionDevicesToRemove.each { device ->
+		log.debug "Removing $device.displayName subscription"
+		state.remove(device.id)
+		unsubscribe(device)
+	}
 	log.debug settings
-}
-
-def performUninstall() {
-    uninstall()
 }
 
 def list() {
@@ -173,7 +187,7 @@ def deviceHandler(evt) {
 	def deviceInfo = state[evt.deviceId]
 	if (deviceInfo) {
 		try {
-			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value, date: evt.isoDate]]) {
+			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value]]) {
 				log.debug "[PROD IFTTT] Event data successfully posted"
 			}
 		} catch (groovyx.net.http.ResponseParseException e) {
