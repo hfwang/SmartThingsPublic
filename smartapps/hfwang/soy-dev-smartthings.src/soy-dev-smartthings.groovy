@@ -3,35 +3,20 @@
  *
  *  Copyright 2015 Soy Chat
  *
- *  ---------------------+----------------+--------------------------+------------------------------------
- *  Device Type          | Attribute Name | Commands                 | Attribute Values
- *  ---------------------+----------------+--------------------------+------------------------------------
- *  switches             | switch         | on, off                  | on, off
- *  motionSensors        | motion         |                          | active, inactive
- *  contactSensors       | contact        |                          | open, closed
- *  presenceSensors      | presence       |                          | present, 'not present'
- *  temperatureSensors   | temperature    |                          | <numeric, F or C according to unit>
- *  accelerationSensors  | acceleration   |                          | active, inactive
- *  waterSensors         | water          |                          | wet, dry
- *  lightSensors         | illuminance    |                          | <numeric, lux>
- *  humiditySensors      | humidity       |                          | <numeric, percent>
- *  alarms               | alarm          | strobe, siren, both, off | strobe, siren, both, off
- *  locks                | lock           | lock, unlock             | locked, unlocked
- *  ---------------------+----------------+--------------------------+------------------------------------
  */
 definition(
-    name: "Soy dev SmartThings",
+    name: "Soy DEV SmartThings",
     namespace: "hfwang",
-    author: "Hsiu-Fan Wang",
+    author: "Soy Chat",
     description: "Exposes a smartthings hub to the vagries of soy chat.",
-    category: "",
-    iconUrl: "https://ifttt.com/images/channels/ifttt.png",
-    iconX2Url: "https://ifttt.com/images/channels/ifttt_med.png",
-    oauth: [displayName: "Soy Chat", displayLink: "https://www.soychat.com/"])
+    category: "SmartThings Labs",
+    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
+    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
 
 
 preferences {
-	section("Allow IFTTT to control these things...") {
+	section("Allow Soy to control these things...") {
 		input "switches", "capability.switch", title: "Which Switches?", multiple: true, required: false
 		input "motionSensors", "capability.motionSensor", title: "Which Motion Sensors?", multiple: true, required: false
 		input "contactSensors", "capability.contactSensor", title: "Which Contact Sensors?", multiple: true, required: false
@@ -47,7 +32,6 @@ preferences {
 }
 
 mappings {
-
 	path("/:deviceType") {
 		action: [
 			GET: "list"
@@ -68,6 +52,16 @@ mappings {
 			DELETE: "removeSubscription"
 		]
 	}
+	path("/:deviceType/states/:id") {
+		action: [
+			GET: "listDeviceStates"
+		]
+	}
+	path("/:deviceType/events/:id") {
+		action: [
+			GET: "listDeviceEvents"
+		]
+	}
 	path("/:deviceType/:id") {
 		action: [
 			GET: "show",
@@ -86,15 +80,6 @@ def installed() {
 }
 
 def updated() {
-	def currentDeviceIds = settings.collect { k, devices -> devices }.flatten().collect { it.id }.unique()
-	def subscriptionDevicesToRemove = app.subscriptions*.device.findAll { device ->
-		!currentDeviceIds.contains(device.id)
-	}
-	subscriptionDevicesToRemove.each { device ->
-		log.debug "Removing $device.displayName subscription"
-		state.remove(device.id)
-		unsubscribe(device)
-	}
 	log.debug settings
 }
 
@@ -109,6 +94,26 @@ def listStates() {
 	def type = params.deviceType
 	def attributeName = attributeFor(type)
 	settings[type]?.collect{deviceState(it, it.currentState(attributeName))} ?: []
+}
+
+def listDeviceStates() {
+	log.debug "[PROD] deviceStates, params: ${params}"
+	log.debug "[PROD] deviceStates, param[:id]: ${params.id}"
+	def type = params.deviceType
+	def devices = settings[type]
+    def device = devices?.find { it.id == params.id }
+	log.debug "[PROD] deviceStates, device: ${device}"
+	def attributeName = attributeFor(type)
+    device.statesSince(attributeName, new Date(0)).collect { deviceState(device, it) }
+}
+
+def listDeviceEvents() {
+	log.debug "[PROD] eventStates, params: ${params}"
+	def type = params.deviceType
+	def devices = settings[type]
+    def device = devices?.find { it.id == params.id }
+	def attributeName = attributeFor(type)
+    device.events()?.collect { deviceEvent(it) }
 }
 
 def listSubscriptions() {
@@ -136,6 +141,7 @@ def show() {
 	def type = params.deviceType
 	def devices = settings[type]
 	def device = devices.find { it.id == params.id }
+	log.debug "[PROD] deviceStates, device: ${device}"
 
 	log.debug "[PROD] show, params: ${params}, devices: ${devices*.id}"
 	if (!device) {
@@ -187,7 +193,7 @@ def deviceHandler(evt) {
 	def deviceInfo = state[evt.deviceId]
 	if (deviceInfo) {
 		try {
-			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value]]) {
+			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: deviceEvent(evt)]) {
 				log.debug "[PROD IFTTT] Event data successfully posted"
 			}
 		} catch (groovyx.net.http.ResponseParseException e) {
@@ -204,6 +210,10 @@ private deviceItem(it) {
 
 private deviceState(device, s) {
 	device && s ? [id: device.id, label: device.displayName, name: s.name, value: s.value, unixTime: s.date.time] : null
+}
+
+private deviceEvent(evt) {
+    [id: evt.id.toString(), deviceId: evt.deviceId, name: evt.name, value: evt.value, date: evt.isoDate, description: evt.description, descriptionText: evt.descriptionText, isStateChange: evt.isStateChange(), installedSmartAppId: evt.installedSmartAppId, source: evt.source]
 }
 
 private attributeFor(type) {

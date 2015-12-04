@@ -9,7 +9,7 @@ definition(
     namespace: "hfwang",
     author: "Soy Chat",
     description: "Exposes a smartthings hub to the vagries of soy chat.",
-    category: "",
+    category: "SmartThings Labs",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
     iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
@@ -32,7 +32,6 @@ preferences {
 }
 
 mappings {
-
 	path("/:deviceType") {
 		action: [
 			GET: "list"
@@ -51,6 +50,16 @@ mappings {
 	path("/:deviceType/subscriptions/:id") {
 		action: [
 			DELETE: "removeSubscription"
+		]
+	}
+	path("/:deviceType/states/:id") {
+		action: [
+			GET: "listDeviceStates"
+		]
+	}
+	path("/:deviceType/events/:id") {
+		action: [
+			GET: "listDeviceEvents"
 		]
 	}
 	path("/:deviceType/:id") {
@@ -87,6 +96,26 @@ def listStates() {
 	settings[type]?.collect{deviceState(it, it.currentState(attributeName))} ?: []
 }
 
+def listDeviceStates() {
+	log.debug "[PROD] deviceStates, params: ${params}"
+	log.debug "[PROD] deviceStates, param[:id]: ${params.id}"
+	def type = params.deviceType
+	def devices = settings[type]
+    def device = devices?.find { it.id == params.id }
+	log.debug "[PROD] deviceStates, device: ${device}"
+	def attributeName = attributeFor(type)
+    device.statesSince(attributeName, new Date(0)).collect { deviceState(device, it) }
+}
+
+def listDeviceEvents() {
+	log.debug "[PROD] eventStates, params: ${params}"
+	def type = params.deviceType
+	def devices = settings[type]
+    def device = devices?.find { it.id == params.id }
+	def attributeName = attributeFor(type)
+    device.events()?.collect { deviceEvent(it) }
+}
+
 def listSubscriptions() {
 	state
 }
@@ -112,6 +141,7 @@ def show() {
 	def type = params.deviceType
 	def devices = settings[type]
 	def device = devices.find { it.id == params.id }
+	log.debug "[PROD] deviceStates, device: ${device}"
 
 	log.debug "[PROD] show, params: ${params}, devices: ${devices*.id}"
 	if (!device) {
@@ -163,7 +193,7 @@ def deviceHandler(evt) {
 	def deviceInfo = state[evt.deviceId]
 	if (deviceInfo) {
 		try {
-			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: [deviceId: evt.deviceId, name: evt.name, value: evt.value]]) {
+			httpPostJson(uri: deviceInfo.callbackUrl, path: '',  body: [evt: deviceEvent(evt)]) {
 				log.debug "[PROD IFTTT] Event data successfully posted"
 			}
 		} catch (groovyx.net.http.ResponseParseException e) {
@@ -180,6 +210,10 @@ private deviceItem(it) {
 
 private deviceState(device, s) {
 	device && s ? [id: device.id, label: device.displayName, name: s.name, value: s.value, unixTime: s.date.time] : null
+}
+
+private deviceEvent(evt) {
+    [id: evt.id.toString(), deviceId: evt.deviceId, name: evt.name, value: evt.value, date: evt.isoDate, description: evt.description, descriptionText: evt.descriptionText, isStateChange: evt.isStateChange(), installedSmartAppId: evt.installedSmartAppId, source: evt.source]
 }
 
 private attributeFor(type) {
