@@ -18,6 +18,8 @@ definition(
 preferences {
 	section("Allow Soy to control these things...") {
 		input "switches", "capability.switch", title: "Which Switches?", multiple: true, required: false
+		input "videoCaptures", "capability.videoCapture", title: "Which Cameras?", multiple: true, required: false
+		input "imageCaptures", "capability.imageCapture", title: "Which Cameras?", multiple: true, required: false
 		input "motionSensors", "capability.motionSensor", title: "Which Motion Sensors?", multiple: true, required: false
 		input "contactSensors", "capability.contactSensor", title: "Which Contact Sensors?", multiple: true, required: false
 		input "presenceSensors", "capability.presenceSensor", title: "Which Presence Sensors?", multiple: true, required: false
@@ -73,6 +75,12 @@ mappings {
 			GET: "listSubscriptions"
 		]
 	}
+    path("/location") {
+		action: [
+			GET: "dumpLocation"
+		]
+	}
+    
 }
 
 def installed() {
@@ -81,6 +89,20 @@ def installed() {
 
 def updated() {
 	log.debug settings
+}
+
+def dumpLocation() {
+    log.debug "Dumping location"
+    return [
+    	id: location.id,
+        mode: [id: location.currentMode.id, name: location.currentMode.name],
+	    latitude: location.latitude,
+        longitude: location.longitude,
+        name: location.name,
+        temperatureScale: location.temperatureScale,
+        timezone: location.timeZone.getID(),
+        zipCode: location.zipCode
+    ]
 }
 
 def list() {
@@ -125,6 +147,7 @@ def update() {
 	def data = request.JSON
 	def devices = settings[type]
 	def command = data.command
+    def args = data.args ?: []
 
 	log.debug "[PROD] update, params: ${params}, request: ${data}, devices: ${devices*.id}"
 	if (command) {
@@ -132,7 +155,7 @@ def update() {
 		if (!device) {
 			httpError(404, "Device not found")
 		} else {
-			device."$command"()
+			device."$command"(*args)
 		}
 	}
 }
@@ -146,11 +169,10 @@ def show() {
 	log.debug "[PROD] show, params: ${params}, devices: ${devices*.id}"
 	if (!device) {
 		httpError(404, "Device not found")
-	}
-	else {
+	} else {
 		def attributeName = attributeFor(type)
 		def s = device.currentState(attributeName)
-		deviceState(device, s)
+        deviceItem(device)
 	}
 }
 
@@ -158,7 +180,7 @@ def addSubscription() {
 	log.debug "[PROD] addSubscription1"
 	def type = params.deviceType
 	def data = request.JSON
-	def attribute = attributeFor(type)
+	def attribute = data.attribute ? data.attribute : attributeFor(type)
 	def devices = settings[type]
 	def deviceId = data.deviceId
 	def callbackUrl = data.callbackUrl
@@ -204,8 +226,9 @@ def deviceHandler(evt) {
 	}
 }
 
-private deviceItem(it) {
-	it ? [id: it.id, label: it.displayName] : null
+private deviceItem(device) {
+	device ? [id: device.id, displayName: device.displayName, capabilities: device.capabilities.collect { it.name }, commands: device.supportedCommands.collect { [name: it.name, arguments: it.arguments] }, attributes: device.supportedAttributes.collect { [name: it.name, value: device["${it.name}State"] ] }]
+ : null
 }
 
 private deviceState(device, s) {
