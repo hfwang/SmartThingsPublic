@@ -14,6 +14,24 @@ definition(
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
     iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
 
+preferences {
+	section("Allow Soy to control these things...") {
+		input "switches", "capability.switch", title: "Which Switches?", multiple: true, required: false
+		input "videoCaptures", "capability.videoCapture", title: "Which Cameras?", multiple: true, required: false
+		input "imageCaptures", "capability.imageCapture", title: "Which Cameras?", multiple: true, required: false
+		input "motionSensors", "capability.motionSensor", title: "Which Motion Sensors?", multiple: true, required: false
+		input "contactSensors", "capability.contactSensor", title: "Which Contact Sensors?", multiple: true, required: false
+		input "presenceSensors", "capability.presenceSensor", title: "Which Presence Sensors?", multiple: true, required: false
+		input "temperatureSensors", "capability.temperatureMeasurement", title: "Which Temperature Sensors?", multiple: true, required: false
+		input "accelerationSensors", "capability.accelerationSensor", title: "Which Vibration Sensors?", multiple: true, required: false
+		input "waterSensors", "capability.waterSensor", title: "Which Water Sensors?", multiple: true, required: false
+		input "lightSensors", "capability.illuminanceMeasurement", title: "Which Light Sensors?", multiple: true, required: false
+		input "humiditySensors", "capability.relativeHumidityMeasurement", title: "Which Relative Humidity Sensors?", multiple: true, required: false
+		input "alarms", "capability.alarm", title: "Which Sirens?", multiple: true, required: false
+		input "locks", "capability.lock", title: "Which Locks?", multiple: true, required: false
+	}
+}
+
 mappings {
 	path("/:deviceType") {
 		action: [
